@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Учёт склада{% endblock %}
+{% block body %}
+  <h1>Складской учёт</h1>
+  <p class="lead">Приход и расход ведутся накладными. Остаток каждой партии пересчитывают триггеры: продать больше, чем лежит на складе, база не даст.</p>
+  <div class="cards">
+    <div class="card"><span>Склады</span><b>{{ stats.warehouses }}</b></div>
+    <div class="card"><span>Сотрудники</span><b>{{ stats.staff }}</b></div>
+    <div class="card"><span>Товары</span><b>{{ stats.products }}</b></div>
+    <div class="card"><span>Приходных накладных</span><b>{{ stats.receipts }}</b></div>
+    <div class="card"><span>Расходных накладных</span><b>{{ stats.issues }}</b></div>
+    <div class="card"><span>Стоимость остатка</span><b>{{ stats.stock_value|money }}</b></div>
+  </div>
+  <div class="actions">
+    <a class="button" href="{{ url_for('receipt_edit') }}">Новая приходная накладная</a>
+    <a class="button" href="{{ url_for('issue_edit') }}">Новая расходная накладная</a>
+    <a class="button ghost" href="{{ url_for('report_view', slug='stock') }}">Остатки</a>
+    <a class="button ghost" href="{{ url_for('report_view', slug='profit') }}">Прибыль</a>
+    <a class="button ghost" href="{{ url_for('report_view', slug='suppliers') }}">Приход по поставщикам</a>
+  </div>
+{% endblock %}

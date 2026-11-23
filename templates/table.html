@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}{{ spec.title }}{% endblock %}
+{% block body %}
+  <h1>{{ spec.title }}</h1>
+  {% if spec.readonly %}
+    <p class="hint">Только просмотр. {% if spec.table == 'stock' %}Строки создают и меняют триггеры прихода и расхода.{% else %}Это представление.{% endif %}</p>
+  {% endif %}
+
+  <form class="filters panel" method="get">
+    <label>Поиск
+      <input name="q" value="{{ params.q }}" placeholder="фрагмент текста">
+    </label>
+    <label>Поле поиска
+      <select name="qfield">
+        {% for column in spec.columns %}
+          <option value="{{ column.name }}" {% if params.qfield == column.name %}selected{% endif %}>{{ column.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Фильтр по полю
+      <select name="ffield">
+        {% for column in spec.columns %}
+          <option value="{{ column.name }}" {% if params.ffield == column.name %}selected{% endif %}>{{ column.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Условие
+      <select name="fop">
+        <option value="contains" {% if params.fop == 'contains' %}selected{% endif %}>содержит</option>
+        <option value="eq" {% if params.fop == 'eq' %}selected{% endif %}>равно</option>
+        <option value="gt" {% if params.fop == 'gt' %}selected{% endif %}>больше</option>
+        <option value="lt" {% if params.fop == 'lt' %}selected{% endif %}>меньше</option>
+      </select>
+    </label>
+    <label>Значение фильтра
+      <input name="fval" value="{{ params.fval }}">
+    </label>
+    <label>Сортировка
+      <select name="sort">
+        {% for column in spec.columns %}
+          <option value="{{ column.name }}" {% if params.sort == column.name %}selected{% endif %}>{{ column.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Порядок
+      <select name="dir">
+        <option value="asc" {% if params.dir != 'desc' %}selected{% endif %}>по возрастанию</option>
+        <option value="desc" {% if params.dir == 'desc' %}selected{% endif %}>по убыванию</option>
+      </select>
+    </label>
+    <div class="actions">
+      <button type="submit">Применить</button>
+      <a class="button ghost" href="{{ url_for('table_view', slug=spec.slug) }}">Сбросить</a>
+    </div>
+  </form>
+
+  {% if not spec.readonly and (blank or rows) %}
+    <form method="post" class="panel record">
+      {% for key, value in params.items() %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endfor %}
+      <input type="hidden" name="mode" value="{{ 'new' if blank else 'edit' }}">
+      <input type="hidden" name="rec" value="{{ 'new' if blank else index }}">
+      {% if rows and not blank %}
+        {% for name in spec.pk %}
+          <input type="hidden" name="original__{{ name }}" value="{{ rows[index][name] }}">
+        {% endfor %}
+      {% endif %}
+      {% for column in spec.columns %}
+        <label>
+          {{ column.label }}
+          {% if column.fk %}
+            <select name="{{ column.name }}">
+              <option value="">—</option>
+              {% for option in fk[column.name] %}
+                <option value="{{ option.v }}" {% if values[column.name]|string == option.v|string %}selected{% endif %}>{{ option.v }} — {{ option.l }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <input
+              name="{{ column.name }}"
+              value="{{ values[column.name] }}"
+              type="{{ 'date' if column.kind == 'date' else 'text' }}"
+              {% if column.auto and not blank %}readonly{% endif %}>
+          {% endif %}
+        </label>
+      {% endfor %}
+      <div class="actions wide">
+        <button type="submit" name="action" value="save">Сохранить</button>
+        {% if rows and not blank %}
+          <button type="submit" name="action" value="delete" class="danger" onclick="return confirm('Удалить текущую запись?')">Удалить</button>
+        {% endif %}
+        <a class="button ghost" href="{{ url_for('table_view', slug=spec.slug, rec='new', q=params.q, qfield=params.qfield, ffield=params.ffield, fop=params.fop, fval=params.fval, sort=params.sort, dir=params.dir) }}">Новая запись</a>
+        {% if spec.slug == 'receipts' and rows and not blank %}
+          <a class="button ghost" href="{{ url_for('receipt_edit', invoice_no=rows[index]['invoice_no']) }}">Строки накладной</a>
+        {% endif %}
+        {% if spec.slug == 'issues' and rows and not blank %}
+          <a class="button ghost" href="{{ url_for('issue_edit', invoice_no=rows[index]['invoice_no']) }}">Строки накладной</a>
+        {% endif %}
+      </div>
+    </form>
+  {% endif %}
+
+  <div class="nav-rec">
+    {% if rows and not blank %}
+      <a class="button ghost" href="{{ url_for('table_view', slug=spec.slug, rec=0, q=params.q, qfield=params.qfield, ffield=params.ffield, fop=params.fop, fval=params.fval, sort=params.sort, dir=params.dir) }}">Первая</a>
+      <a class="button ghost" href="{{ url_for('table_view', slug=spec.slug, rec=index-1 if index > 0 else 0, q=params.q, qfield=params.qfield, ffield=params.ffield, fop=params.fop, fval=params.fval, sort=params.sort, dir=params.dir) }}">Предыдущая</a>
+      <span>Запись {{ index + 1 }} из {{ total }}</span>
+      <a class="button ghost" href="{{ url_for('table_view', slug=spec.slug, rec=index+1 if index < total-1 else index, q=params.q, qfield=params.qfield, ffield=params.ffield, fop=params.fop, fval=params.fval, sort=params.sort, dir=params.dir) }}">Следующая</a>
+      <a class="button ghost" href="{{ url_for('table_view', slug=spec.slug, rec=total-1, q=params.q, qfield=params.qfield, ffield=params.ffield, fop=params.fop, fval=params.fval, sort=params.sort, dir=params.dir) }}">Последняя</a>
+    {% elif blank %}
+      <span>Новая запись</span>
+    {% else %}
+      <span>По этому условию записей нет.</span>
+      {% if not spec.readonly %}
+        <a class="button ghost" href="{{ url_for('table_view', slug=spec.slug, rec='new') }}">Новая запись</a>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        {% for column in spec.columns %}
+          <th>{{ column.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in shown %}
+        <tr class="{% if not blank and loop.index0 == index %}current{% endif %} clickable" data-href="{{ url_for('table_view', slug=spec.slug, rec=loop.index0, q=params.q, qfield=params.qfield, ffield=params.ffield, fop=params.fop, fval=params.fval, sort=params.sort, dir=params.dir) }}">
+          {% for column in spec.columns %}
+            <td>{{ row[column.name] }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <script>
+    document.querySelectorAll("tr.clickable").forEach(function (row) {
+      row.addEventListener("click", function () { location.href = row.dataset.href; });
+    });
+  </script>
+{% endblock %}
