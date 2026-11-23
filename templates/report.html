@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+  <h1>{{ title }}</h1>
+  {% if slug == 'stock' %}
+    <p class="lead">Отчёт собран из остатков, товаров и складов. Группировка — по складу. Сумма остатка считается как остаток × цена закупки. Перед построением задайте фильтр и сортировку.</p>
+  {% elif slug == 'profit' %}
+    <p class="lead">Отчёт собран из расхода, строк расхода, остатков, товаров и складов. Группировка — по складу. Выручка, себестоимость, прибыль и рентабельность — вычисляемые поля.</p>
+  {% else %}
+    <p class="lead">Отчёт собран из прихода, строк прихода, товаров и складов. Группировка — по поставщику. Сумма строки = количество × цена.</p>
+  {% endif %}
+
+  <form class="filters panel" method="get">
+    <input type="hidden" name="show" value="1">
+    <label>Склад
+      <select name="warehouse">
+        <option value="">все</option>
+        {% for warehouse in warehouses %}
+          <option value="{{ warehouse.id }}" {% if args.get('warehouse')|string == warehouse.id|string %}selected{% endif %}>{{ warehouse.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if slug == 'stock' %}
+      <label>Категория
+        <select name="category">
+          <option value="">все</option>
+          {% for category in categories %}
+            <option value="{{ category }}" {% if args.get('category') == category %}selected{% endif %}>{{ category }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Товар содержит
+        <input name="name" value="{{ args.get('name', '') }}">
+      </label>
+      <label class="check">
+        <input type="checkbox" name="only_positive" value="1" {% if not show or args.get('only_positive') %}checked{% endif %}>
+        только ненулевой остаток
+      </label>
+      <label>Сортировка внутри склада
+        <select name="sort">
+          {% for value, label in [('product', 'товар'), ('qty_left', 'остаток'), ('amount', 'сумма'), ('nomenclature', 'номенклатурный номер')] %}
+            <option value="{{ value }}" {% if args.get('sort', 'product') == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% elif slug == 'profit' %}
+      <label>Дата с
+        <input type="date" name="date_from" value="{{ args.get('date_from', '') }}">
+      </label>
+      <label>Дата по
+        <input type="date" name="date_to" value="{{ args.get('date_to', '') }}">
+      </label>
+      <label>Покупатель содержит
+        <input name="customer" value="{{ args.get('customer', '') }}">
+      </label>
+      <label>Товар содержит
+        <input name="product" value="{{ args.get('product', '') }}">
+      </label>
+      <label>Сортировка внутри склада
+        <select name="sort">
+          {% for value, label in [('doc_date', 'дата'), ('product', 'товар'), ('profit', 'прибыль'), ('customer', 'покупатель')] %}
+            <option value="{{ value }}" {% if args.get('sort', 'doc_date') == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% else %}
+      <label>Дата с
+        <input type="date" name="date_from" value="{{ args.get('date_from', '') }}">
+      </label>
+      <label>Дата по
+        <input type="date" name="date_to" value="{{ args.get('date_to', '') }}">
+      </label>
+      <label>Поставщик содержит
+        <input name="supplier" value="{{ args.get('supplier', '') }}">
+      </label>
+      <label>Сортировка внутри поставщика
+        <select name="sort">
+          {% for value, label in [('doc_date', 'дата'), ('amount', 'сумма'), ('product', 'товар'), ('supplier', 'поставщик')] %}
+            <option value="{{ value }}" {% if args.get('sort', 'doc_date') == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endif %}
+    <label>Порядок
+      <select name="dir">
+        <option value="asc" {% if args.get('dir', 'asc') != 'desc' %}selected{% endif %}>по возрастанию</option>
+        <option value="desc" {% if args.get('dir') == 'desc' %}selected{% endif %}>по убыванию</option>
+      </select>
+    </label>
+    <div class="actions">
+      <button type="submit">Сформировать</button>
+      <button type="button" class="ghost" onclick="window.print()">Печать</button>
+    </div>
+  </form>
+
+  {% if result %}
+    <p class="muted">Строк: {{ result.count }}</p>
+    {% if result.count == 0 %}
+      <p>По этим условиям строк нет.</p>
+    {% else %}
+      <table>
+        <thead>
+          <tr>
+            {% for column in result.columns %}<th>{{ column.label }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for group in result.groups %}
+            <tr class="group"><td colspan="{{ result.columns|length }}">{{ group.title }}</td></tr>
+            {% for row in group.rows %}
+              <tr>
+                {% for column in result.columns %}
+                  <td>{{ row[column.key]|cell(column.kind) }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+            <tr class="subtotal">
+              {% for column in result.columns %}
+                <td>
+                  {% if loop.first %}Итого по группе{% elif column.key in group.totals %}{{ group.totals[column.key]|cell(column.kind) }}{% endif %}
+                </td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+          <tr class="grand">
+            {% for column in result.columns %}
+              <td>
+                {% if loop.first %}Всего{% elif column.key in result.grand %}{{ result.grand[column.key]|cell(column.kind) }}{% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+{% endblock %}

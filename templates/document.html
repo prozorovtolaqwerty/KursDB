@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Приход' if kind == 'receipt' else 'Расход' }} {{ header.invoice_no }}{% endblock %}
+{% block body %}
+  <h1>{{ 'Приходная накладная' if kind == 'receipt' else 'Расходная накладная' }}</h1>
+  <p class="hint">Шапка записывается в таблицу {{ 'прихода' if kind == 'receipt' else 'расхода' }}, строки — в таблицу накладной. Это ввод в две таблицы со связью один ко многим.</p>
+  <form method="post" id="doc-form">
+    {% if original_invoice %}
+      <input type="hidden" name="original_invoice" value="{{ original_invoice }}">
+    {% endif %}
+    <div class="record panel">
+      <label>Номер накладной
+        <input id="invoice_no" name="invoice_no" value="{{ header.invoice_no }}" required>
+      </label>
+      <label>Склад
+        <select id="warehouse_no" name="warehouse_no">
+          {% for warehouse in warehouses %}
+            <option value="{{ warehouse.id }}" {% if warehouse.id|string == header.warehouse_no|string %}selected{% endif %}>{{ warehouse.id }} — {{ warehouse.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Дата
+        {% if kind == 'receipt' %}
+        <input type="date" name="receipt_date" value="{{ header.receipt_date }}" required>
+        {% else %}
+        <input type="date" name="issue_date" value="{{ header.issue_date }}" required>
+        {% endif %}
+      </label>
+      {% if kind == 'receipt' %}
+        <label>Поставщик
+          <input name="supplier" value="{{ header.supplier }}" required>
+        </label>
+        <label>Документ поставщика
+          <input name="supplier_doc" value="{{ header.supplier_doc or '' }}">
+        </label>
+      {% else %}
+        <label>Покупатель
+          <input name="customer" value="{{ header.customer }}" required>
+        </label>
+      {% endif %}
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          {% if kind == 'receipt' %}
+            <th>Товар</th><th>Номенклатурный номер</th><th>Цена</th><th>Количество</th><th></th>
+          {% else %}
+            <th>Партия</th><th>Цена продажи</th><th>Количество</th><th></th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody id="lines">
+        {% for line in lines %}
+          <tr>
+            {% if kind == 'receipt' %}
+              <td>
+                <input type="hidden" name="line_no" value="{{ line.line_no }}">
+                <select name="product_id">
+                  <option value="">— товар —</option>
+                  {% for product in products %}
+                    <option value="{{ product.id }}" {% if product.id|string == line.product_id|string %}selected{% endif %}>{{ product.name }} ({{ product.unit }})</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input name="nomenclature_no" value="{{ line.nomenclature_no }}" {% if line.line_no %}data-lock="1" readonly{% endif %}></td>
+              <td><input name="price" value="{{ line.price }}"></td>
+              <td><input name="qty" value="{{ line.qty }}"></td>
+            {% else %}
+              <td>
+                <input type="hidden" name="line_no" value="{{ line.line_no }}">
+                <select name="nomenclature_no" {% if line.line_no %}data-lock="1"{% endif %}>
+                  <option value="">— партия —</option>
+                  {% for item in stock %}
+                    <option value="{{ item.nom }}" data-price="{{ item.price }}" data-left="{{ item.left_qty }}" data-unit="{{ item.unit }}" {% if item.nom == line.nomenclature_no %}selected{% endif %}>
+                      {{ item.name }} · {{ item.nom }} · ост. {{ item.left_qty|qty }} {{ item.unit }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input name="sale_price" value="{{ line.sale_price }}"></td>
+              <td><input name="qty" value="{{ line.qty }}"></td>
+            {% endif %}
+            <td><button type="button" class="ghost remove">Убрать</button></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions">
+      <button type="button" id="add-line" class="ghost">Добавить строку</button>
+      <button type="submit">Сохранить накладную</button>
+    </div>
+  </form>
+  {% if original_invoice %}
+    <form method="post" action="{{ url_for('receipt_delete' if kind == 'receipt' else 'issue_delete', invoice_no=original_invoice) }}" onsubmit="return confirm('Удалить накладную?')">
+      <button type="submit" class="danger">Удалить накладную</button>
+    </form>
+  {% endif %}
+
+  <template id="line-tpl">
+    <tr>
+      {% if kind == 'receipt' %}
+        <td>
+          <input type="hidden" name="line_no" value="">
+          <select name="product_id">
+            <option value="">— товар —</option>
+            {% for product in products %}
+              <option value="{{ product.id }}">{{ product.name }} ({{ product.unit }})</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td><input name="nomenclature_no" value=""></td>
+        <td><input name="price" value=""></td>
+        <td><input name="qty" value=""></td>
+      {% else %}
+        <td>
+          <input type="hidden" name="line_no" value="">
+          <select name="nomenclature_no"></select>
+        </td>
+        <td><input name="sale_price" value=""></td>
+        <td><input name="qty" value=""></td>
+      {% endif %}
+      <td><button type="button" class="ghost remove">Убрать</button></td>
+    </tr>
+  </template>
+
+  <script>
+    window.stockOptions = {{ stock|tojson }};
+    const kind = {{ kind|tojson }};
+
+    function fillSelect(select, selected) {
+      select.innerHTML = "";
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "— партия —";
+      select.appendChild(blank);
+      (window.stockOptions || []).forEach(function (item) {
+        const option = document.createElement("option");
+        option.value = item.nom;
+        option.textContent = item.name + " · " + item.nom + " · ост. " + item.left_qty + " " + item.unit;
+        option.dataset.price = item.price;
+        option.dataset.left = item.left_qty;
+        option.dataset.unit = item.unit;
+        if (item.nom === selected) option.selected = true;
+        select.appendChild(option);
+      });
+    }
+
+    function bindRow(row) {
+      const remove = row.querySelector(".remove");
+      if (remove) {
+        remove.addEventListener("click", function () { row.remove(); });
+      }
+      const select = row.querySelector("select[name='nomenclature_no']");
+      const price = row.querySelector("[name='sale_price']");
+      if (select && price && select.dataset.lock !== "1") {
+        select.addEventListener("change", function () {
+          const option = select.selectedOptions[0];
+          if (!option || !option.dataset.price || price.dataset.touched === "1") return;
+          price.value = (Number(option.dataset.price) * 1.25).toFixed(2);
+        });
+        price.addEventListener("input", function () { price.dataset.touched = "1"; });
+      }
+    }
+
+    document.querySelectorAll("#lines tr").forEach(bindRow);
+
+    document.getElementById("add-line").addEventListener("click", function () {
+      const row = document.getElementById("line-tpl").content.cloneNode(true).querySelector("tr");
+      document.getElementById("lines").appendChild(row);
+      const select = row.querySelector("select[name='nomenclature_no']");
+      if (select) fillSelect(select, "");
+      const nom = row.querySelector("[name='nomenclature_no']");
+      if (nom && kind === "receipt") {
+        const rows = document.querySelectorAll("#lines tr").length;
+        nom.value = document.getElementById("warehouse_no").value + "-" + document.getElementById("invoice_no").value + "-" + rows;
+      }
+      bindRow(row);
+    });
+
+    const warehouse = document.getElementById("warehouse_no");
+    if (warehouse && kind === "issue") {
+      warehouse.addEventListener("change", function () {
+        fetch("/api/stock/" + warehouse.value).then(function (response) { return response.json(); }).then(function (data) {
+          window.stockOptions = data;
+          document.querySelectorAll("select[name='nomenclature_no']").forEach(function (select) {
+            if (select.dataset.lock === "1") return;
+            fillSelect(select, select.value);
+          });
+        });
+      });
+    }
+  </script>
+{% endblock %}

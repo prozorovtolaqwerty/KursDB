@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Учёт склада{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+</head>
+<body>
+  <div class="layout">
+    <aside class="side">
+      <a class="brand" href="{{ url_for('home') }}">Учёт склада</a>
+      <h2>Справочники</h2>
+      {% for item in tables if item.group == 'Справочники' %}
+        <a class="nav {% if request.endpoint == 'table_view' and request.view_args.slug == item.slug %}active{% endif %}" href="{{ url_for('table_view', slug=item.slug) }}">{{ item.menu or item.title }}</a>
+      {% endfor %}
+      <h2>Документы</h2>
+      <a class="nav {% if request.endpoint == 'receipt_edit' %}active{% endif %}" href="{{ url_for('receipt_edit') }}">Новый приход 1:M</a>
+      <a class="nav {% if request.endpoint == 'issue_edit' %}active{% endif %}" href="{{ url_for('issue_edit') }}">Новый расход 1:M</a>
+      {% for item in tables if item.group == 'Документы' %}
+        <a class="nav {% if request.endpoint == 'table_view' and request.view_args.slug == item.slug %}active{% endif %}" href="{{ url_for('table_view', slug=item.slug) }}">{{ item.menu or item.title }}</a>
+      {% endfor %}
+      <h2>Представления</h2>
+      {% for item in views %}
+        <a class="nav {% if request.endpoint == 'table_view' and request.view_args.slug == item.slug %}active{% endif %}" href="{{ url_for('table_view', slug=item.slug) }}">{{ item.menu or item.title }}</a>
+      {% endfor %}
+      <h2>Отчёты</h2>
+      <a class="nav {% if request.view_args and request.view_args.get('slug') == 'stock' %}active{% endif %}" href="{{ url_for('report_view', slug='stock') }}">Остатки на складе</a>
+      <a class="nav {% if request.view_args and request.view_args.get('slug') == 'profit' %}active{% endif %}" href="{{ url_for('report_view', slug='profit') }}">Прибыль от реализации</a>
+      <a class="nav {% if request.view_args and request.view_args.get('slug') == 'suppliers' %}active{% endif %}" href="{{ url_for('report_view', slug='suppliers') }}">Приход по поставщикам</a>
+    </aside>
+    <main class="main">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="flash {{ 'error' if category == 'error' else 'ok' }}">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+      {% block body %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>
